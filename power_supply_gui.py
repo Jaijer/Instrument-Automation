@@ -2,11 +2,15 @@ import sys
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox, QGroupBox,
-    QGridLayout
+    QGridLayout, QDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 import pyvisa
+import csv
+import os
+from datetime import datetime
+import pyqtgraph as pg
 
 
 class PowerSupplyGUI(QWidget):
@@ -99,6 +103,11 @@ class PowerSupplyGUI(QWidget):
             "background-color: #ff6b6b; color: white; font-weight: bold; min-height: 40px; padding: 12px;")
         button_layout.addWidget(self.output_btn)
 
+        self.graph_btn = QPushButton("Show Graph")
+        self.graph_btn.clicked.connect(self.show_graph)
+        self.graph_btn.setMinimumHeight(40)
+        button_layout.addWidget(self.graph_btn)
+
         control_layout.addLayout(button_layout, 4, 0, 1, 2)
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
@@ -161,6 +170,24 @@ class PowerSupplyGUI(QWidget):
 
             self.status_label.setText(f"Set: CH{channel} V={voltage}V I={current}A (Limit: {voltage_limit}V)")
 
+            # Create log directory and file if not exist
+            log_file = "psu_log.csv"
+            file_exists = os.path.isfile(log_file)
+
+            # Log format: timestamp, channel, voltage_limit, voltage, current
+            with open(log_file, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                if not file_exists:
+                    writer.writerow(["Timestamp", "Channel", "VoltageLimit(V)", "Voltage(V)", "Current(A)"])
+                writer.writerow([
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    channel,
+                    voltage_limit,
+                    voltage,
+                    current
+                ])
+
+
         except ValueError as e:
             QMessageBox.warning(self, "Invalid Input", str(e))
         except Exception as e:
@@ -198,6 +225,54 @@ class PowerSupplyGUI(QWidget):
                 pass
         event.accept()
 
+
+def show_graph(self):
+    """Display voltage/current graph from log"""
+    if not os.path.exists("psu_log.csv"):
+        QMessageBox.information(self, "No Data", "No log file found.")
+        return
+
+    # Read CSV data
+    timestamps, voltages, currents = [], [], []
+    with open("psu_log.csv", newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            timestamps.append(row["Timestamp"])
+            voltages.append(float(row["Voltage(V)"]))
+            currents.append(float(row["Current(A)"]))
+
+    # Show in a PyQtGraph plot inside a QDialog
+    dialog = QDialog(self)
+    dialog.setWindowTitle("Voltage & Current Graph")
+    dialog.resize(600, 400)
+
+    layout = QVBoxLayout(dialog)
+    plot_widget = pg.PlotWidget(title="Voltage and Current over Time")
+    plot_widget.setBackground("w")
+
+    # Plot voltage
+    plot_widget.plot(
+        list(range(len(voltages))),
+        voltages,
+        pen=pg.mkPen(color='b', width=2),
+        name="Voltage (V)"
+    )
+
+    # Plot current
+    plot_widget.plot(
+        list(range(len(currents))),
+        currents,
+        pen=pg.mkPen(color='r', width=2),
+        name="Current (A)"
+    )
+
+    plot_widget.addLegend()
+    plot_widget.setLabel('left', 'Value')
+    plot_widget.setLabel('bottom', 'Sample Index')
+
+    layout.addWidget(plot_widget)
+    dialog.setLayout(layout)
+    dialog.exec()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
