@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox, QGroupBox,
     QGridLayout, QDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import (Qt, QTimer)
 from PySide6.QtGui import QFont
 import pyvisa
 import csv
@@ -32,6 +32,12 @@ class PowerSupplyGUI(QWidget):
 
         self.init_ui()
         self.load_devices()
+        self.log_file = "temp_voltage_log.csv"
+        self.create_log_file()
+
+        self.log_timer = QTimer(self)
+        self.log_timer.timeout.connect(self.log_voltage)
+        self.log_timer.start(1000)  # Log every 1 second
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -226,53 +232,88 @@ class PowerSupplyGUI(QWidget):
         event.accept()
 
 
+
     def show_graph(self):
-        """Display voltage/current graph from log"""
-        if not os.path.exists("psu_log.csv"):
+        if not os.path.exists(self.log_file):
             QMessageBox.information(self, "No Data", "No log file found.")
             return
 
-        # Read CSV data
-        timestamps, voltages, currents = [], [], []
-        with open("psu_log.csv", newline='') as csvfile:
+        timestamps, voltages = [], []
+
+        with open(self.log_file, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                timestamps.append(row["Timestamp"])
+                timestamps.append(datetime.strptime(row["Timestamp"], "%Y-%m-%d %H:%M:%S"))
                 voltages.append(float(row["Voltage(V)"]))
-                currents.append(float(row["Current(A)"]))
 
-        # Show in a PyQtGraph plot inside a QDialog
         dialog = QDialog(self)
-        dialog.setWindowTitle("Voltage & Current Graph")
-        dialog.resize(600, 400)
+        dialog.setWindowTitle("Voltage vs Time")
+        dialog.resize(700, 400)
 
         layout = QVBoxLayout(dialog)
-        plot_widget = pg.PlotWidget(title="Voltage and Current over Time")
-        plot_widget.setBackground("w")
 
-        # Plot voltage
+        plot_widget = pg.PlotWidget(title="Voltage vs Time")
+        plot_widget.setBackground("w")
+        plot_widget.showGrid(x=True, y=True)
+
+        # Use datetime axis
+        axis = pg.graphicsItems.DateAxisItem.DateAxisItem(orientation='bottom')
+        plot_widget.setAxisItems({'bottom': axis})
+
+        # Convert datetime to UNIX timestamps
+        x_values = [dt.timestamp() for dt in timestamps]
+
         plot_widget.plot(
-            list(range(len(voltages))),
+            x_values,
             voltages,
             pen=pg.mkPen(color='b', width=2),
             name="Voltage (V)"
         )
 
-        # Plot current
-        plot_widget.plot(
-            list(range(len(currents))),
-            currents,
-            pen=pg.mkPen(color='r', width=2),
-            name="Current (A)"
-        )
-
-        plot_widget.addLegend()
-        plot_widget.setLabel('left', 'Value')
-        plot_widget.setLabel('bottom', 'Sample Index')
-
+        plot_widget.setLabel('left', 'Voltage (V)')
+        plot_widget.setLabel('bottom', 'Time')
         layout.addWidget(plot_widget)
         dialog.setLayout(layout)
         dialog.exec()
+
+    def create_log_file(self):
+        with open(self.log_file, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Timestamp", "Voltage(V)"])
+
+    def log_voltage(self):
+        """Log voltage and timestamp every second if device is connected"""
+        if not self.inst:
+            return
+
+        try:
+            # Ask instrument for voltage reading (depends on Keithley SCPI)
+            voltage = float(self.inst.query("MEAS:VOLT?").strip())
+
+            with open(self.log_file, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    voltage
+                ])
+        except Exception as e:
+            # Optional: you could print or log this error
+            pass
+
+    def closeEvent(self, event):
+        """Clean up on close"""
+        self.log_timer.stop()
+        if self.inst:
+            try:
+                self.inst.close()
+            except:
+                pass
+
+        if os.path.exists(self.log_file):
+            os.remove(self.log_file)
+
+        event.accept()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
