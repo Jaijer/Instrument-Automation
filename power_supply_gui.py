@@ -226,53 +226,53 @@ class PowerSupplyGUI(QWidget):
         event.accept()
 
 
-def show_graph(self):
-    """Display voltage/current graph from log"""
-    if not os.path.exists("psu_log.csv"):
-        QMessageBox.information(self, "No Data", "No log file found.")
-        return
+    def show_graph(self):
+        """Display voltage/current graph from log"""
+        if not os.path.exists("psu_log.csv"):
+            QMessageBox.information(self, "No Data", "No log file found.")
+            return
 
-    # Read CSV data
-    timestamps, voltages, currents = [], [], []
-    with open("psu_log.csv", newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            timestamps.append(row["Timestamp"])
-            voltages.append(float(row["Voltage(V)"]))
-            currents.append(float(row["Current(A)"]))
+        # Read CSV data
+        timestamps, voltages, currents = [], [], []
+        with open("psu_log.csv", newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                timestamps.append(row["Timestamp"])
+                voltages.append(float(row["Voltage(V)"]))
+                currents.append(float(row["Current(A)"]))
 
-    # Show in a PyQtGraph plot inside a QDialog
-    dialog = QDialog(self)
-    dialog.setWindowTitle("Voltage & Current Graph")
-    dialog.resize(600, 400)
+        # Show in a PyQtGraph plot inside a QDialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Voltage & Current Graph")
+        dialog.resize(600, 400)
 
-    layout = QVBoxLayout(dialog)
-    plot_widget = pg.PlotWidget(title="Voltage and Current over Time")
-    plot_widget.setBackground("w")
+        layout = QVBoxLayout(dialog)
+        plot_widget = pg.PlotWidget(title="Voltage and Current over Time")
+        plot_widget.setBackground("w")
 
-    # Plot voltage
-    plot_widget.plot(
-        list(range(len(voltages))),
-        voltages,
-        pen=pg.mkPen(color='b', width=2),
-        name="Voltage (V)"
-    )
+        # Plot voltage
+        plot_widget.plot(
+            list(range(len(voltages))),
+            voltages,
+            pen=pg.mkPen(color='b', width=2),
+            name="Voltage (V)"
+        )
 
-    # Plot current
-    plot_widget.plot(
-        list(range(len(currents))),
-        currents,
-        pen=pg.mkPen(color='r', width=2),
-        name="Current (A)"
-    )
+        # Plot current
+        plot_widget.plot(
+            list(range(len(currents))),
+            currents,
+            pen=pg.mkPen(color='r', width=2),
+            name="Current (A)"
+        )
 
-    plot_widget.addLegend()
-    plot_widget.setLabel('left', 'Value')
-    plot_widget.setLabel('bottom', 'Sample Index')
+        plot_widget.addLegend()
+        plot_widget.setLabel('left', 'Value')
+        plot_widget.setLabel('bottom', 'Sample Index')
 
-    layout.addWidget(plot_widget)
-    dialog.setLayout(layout)
-    dialog.exec()
+        layout.addWidget(plot_widget)
+        dialog.setLayout(layout)
+        dialog.exec()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
