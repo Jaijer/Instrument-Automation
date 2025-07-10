@@ -17,7 +17,7 @@ class PowerSupplyGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Keithley 2230G Controller")
-        self.setFixedSize(400, 450)
+        self.setFixedSize(480, 560)
 
         # Initialize VISA
         self.rm = pyvisa.ResourceManager()
